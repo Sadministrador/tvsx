@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Canais</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'DM Sans',sans-serif;touch-action:none;user-select:none;}
+#wrap{position:relative;width:100%;height:100%;}
+
+#vidA,#vidB{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
+#vidB{opacity:0;pointer-events:none;}
+#vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.55)100%);pointer-events:none;z-index:2;}
+
+/* BANNER marca dagua — canto superior ESQUERDO */
+#banner{
+  position:absolute;top:14px;left:14px;z-index:30;
+  width:108px;border-radius:7px;overflow:hidden;
+  box-shadow:0 2px 12px rgba(0,0,0,0.7);
+  opacity:0;transition:opacity 0.4s;pointer-events:none;
+}
+#banner.show{opacity:1;}
+#banner img{width:100%;height:auto;display:block;}
+
+/* SLOT de propaganda — 80% da tela, centralizado */
+#adSlot{
+  position:absolute;inset:0;z-index:40;
+  display:none;background:rgba(0,0,0,0.92);
+  align-items:center;justify-content:center;
+}
+#adSlot.show{display:flex;}
+
+/* container 100% */
+#adInner{
+  position:relative;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#000;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* imagem de banner no slot */
+#adImg{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:none;
+}
+
+/* vídeo de banner no slot */
+#adVid{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:none;
+}
+
+/* slot vazio */
+#adEmpty{
+  display:flex;flex-direction:column;align-items:center;gap:1rem;
+  position:relative;z-index:1;
+}
+.pulse-ring{width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,60,60,0.4);display:flex;align-items:center;justify-content:center;animation:pr 1.8s ease-in-out infinite;}
+@keyframes pr{0%,100%{border-color:rgba(255,60,60,0.15);transform:scale(1);}50%{border-color:rgba(255,60,60,0.7);transform:scale(1.08);}}
+.adEmptyTitle{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.2em;color:rgba(255,255,255,0.2);}
+
+.adBadge{
+  position:absolute;top:14px;left:14px;z-index:41;
+  background:rgba(220,30,30,0.85);color:#fff;
+  font-family:'Bebas Neue',sans-serif;font-size:0.7rem;letter-spacing:0.2em;
+  padding:3px 12px;border-radius:4px;display:none;
+}
+
+/* HUD */
+#info{position:absolute;bottom:2.5rem;left:1.5rem;z-index:5;pointer-events:none;transition:opacity 0.5s;}
+#info.hide{opacity:0;}
+#chNum{font-family:'Bebas Neue',sans-serif;font-size:0.7rem;letter-spacing:0.28em;color:rgba(255,255,255,0.4);margin-bottom:2px;}
+#chName{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.04em;color:#fff;line-height:1;text-shadow:0 2px 16px rgba(0,0,0,0.9);}
+#dots{position:absolute;right:12px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:5px;pointer-events:none;max-height:80vh;overflow:hidden;}
+.dot{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all 0.3s;flex-shrink:0;}
+.dot.active{background:#fff;height:18px;border-radius:2px;}
+.dot.is-ad{background:rgba(220,30,30,0.3);}
+.dot.is-ad.active{background:#dc1e1e;height:18px;}
+#hint{position:absolute;bottom:2.5rem;right:1.5rem;z-index:5;display:flex;flex-direction:column;align-items:center;gap:5px;opacity:0.35;pointer-events:none;animation:fadeHint 6s ease forwards;}
+@keyframes fadeHint{0%,70%{opacity:0.35}100%{opacity:0}}
+#hint svg{animation:bob 1.3s ease-in-out infinite;}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+#hint span{font-size:0.6rem;letter-spacing:0.15em;color:#fff;text-transform:uppercase;}
+
+#loader{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#000;transition:opacity 0.4s;}
+#loader.hide{opacity:0;pointer-events:none;}
+.spinner{width:32px;height:32px;border:2px solid rgba(255,255,255,0.08);border-top-color:#ff3c3c;border-radius:50%;animation:spin 0.75s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+#errMsg{position:absolute;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;gap:0.8rem;background:rgba(0,0,0,0.85);color:#fff;}
+#errMsg .ename{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.06em;}
+#errMsg span{font-size:0.78rem;color:#555;}
+#errMsg .skip{background:#222;color:#aaa;border:1px solid #333;padding:0.45rem 1.4rem;border-radius:6px;font-size:0.85rem;cursor:pointer;}
+#soundHint{position:absolute;bottom:5rem;left:50%;transform:translateX(-50%);z-index:70;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.15);border-radius:30px;padding:0.45rem 1.2rem;font-size:0.72rem;letter-spacing:0.12em;color:rgba(255,255,255,0.6);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.4s;}
+#soundHint.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <video id="vidA" autoplay playsinline muted></video>
+  <video id="vidB" autoplay playsinline muted></video>
+  <div id="vignette"></div>
+
+  <!-- Marca dagua: banner sobre o canal — LADO ESQUERDO -->
+  <div id="banner"><img id="bannerImg" src="" alt=""></div>
+
+  <!-- Slot de propaganda — 80% da tela, centralizado -->
+  <div id="adSlot">
+    <div id="adInner">
+      <div id="adEmpty">
+        <div class="pulse-ring">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff3c3c" stroke-width="1.5">
+            <rect x="2" y="7" width="20" height="15" rx="2"/>
+            <path d="M16 7V5a2 2 0 0 0-4 0v2"/>
+          </svg>
+        </div>
+        <div class="adEmptyTitle">Espaco Publicitario</div>
+      </div>
+      <img id="adImg" src="" alt="">
+      <video id="adVid" autoplay playsinline muted loop></video>
+    </div>
+  </div>
+  <div class="adBadge" id="adBadge">PUBLICIDADE</div>
+
+  <div id="soundHint">🔇 Toque para ativar o som</div>
+  <div id="info"><div id="chNum"></div><div id="chName">Carregando...</div></div>
+  <div id="hint">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <span>Deslize</span>
+  </div>
+  <div id="dots"></div>
+  <div id="loader"><div class="spinner"></div></div>
+  <div id="errMsg">
+    <div class="ename" id="errName"></div>
+    <span>Indisponivel — pulando em <span id="errCount">5</span>s</span>
+    <button class="skip" onclick="nextSlot()">Pular</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref as dbRef, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCXTQ932v0Amnbtha01BzFsUfUZKnwYQIA",
+  authDomain: "chofer-522be.firebaseapp.com",
+  databaseURL: "https://chofer-522be-default-rtdb.firebaseio.com",
+  projectId: "chofer-522be",
+  storageBucket: "chofer-522be.appspot.com",
+  messagingSenderId: "81306033578",
+  appId: "1:81306033578:web:0c3688bc455a51b972dfd3"
+};
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+const CHANNELS = [
+  {name:"Sony One Classicas", url:"https://spt-sonyoneclassicas-1-br.samsung.wurl.tv/playlist.m3u8"},
+  {name:"RT Arabic",          url:"https://run-rt-ra.otteravision.com/run/rt_ra/rt_ra_720.m3u8"},
+  {name:"Plex TV",            url:"https://amg00353-amg00353c29-plex-us-3205.playouts.now.amagi.tv/1080p-cc/index.m3u8"},
+  {name:"GLN Filmes",         url:"https://stmv8.samcast.com.br/glnfilmes/glnfilmes/playlist.m3u8"},
+  {name:"TV do Carro",        url:"https://tv03.zas.media:1936/tvdocarro/tvdocarro/playlist.m3u8"},
+  {name:"Wording TV",         url:"https://tv02.zas.media:1936/wordingtv/wordingtv/playlist.m3u8"},
+  {name:"MasterChef Brasil",  url:"https://amg00627-amg00627c9-runtime-latam-2613.playouts.now.amagi.tv/playlist/amg00627-banijayfast-masterchefbrazil-runtimelatam/playlist.m3u8"},
+  {name:"Globo / TCL",        url:"https://amg00716-globo-amg00716c3-tcl-br-9498.playouts.now.amagi.tv/1080p-cc/index.m3u8"},
+  {name:"Tastemade PT",       url:"https://amg00047-tastemade-amg00047c5-plex-us-2273.playouts.now.amagi.tv/playlist/amg00047-tastemadefast-tastemadeportuguesept16intl-plexus/playlist.m3u8"},
+  {name:"Tastemade ES",       url:"https://amg00047-amg00047c6-canelatv-international-5854.playouts.now.amagi.tv/playlist/amg00047-tastemadefast-tastemadeespanoles16us-canelatvinternational/playlist.m3u8"},
+  {name:"Canal 29",           url:"https://stmv1.srvif.com/canal29/canal29/playlist.m3u8"},
+  {name:"Jetson TV",          url:"https://stmv1.srvif.com/jetsontv/jetsontv/playlist.m3u8"},
+  {name:"Central TV Web",     url:"https://tv01.zas.media:1936/centraltvweb/centraltvweb/playlist.m3u8"},
+  {name:"AMG Canal",          url:"https://amg01391-amg01391c10-tcl-br-9630.playouts.now.amagi.tv/playlist.m3u8"},
+  {name:"NSport",             url:"https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt_720p.m3u8"},
+  {name:"Top TV",             url:"https://isaocorp.cloudecast.com/toptv/index.m3u8"},
+  {name:"Lightning 80s",      url:"https://lightning-now80s-rakuten.amagi.tv/playlist.m3u8"},
+  {name:"New Kid TV",         url:"https://newidco-newkid-1-eu.xiaomi.wurl.tv/playlist.m3u8"},
+  {name:"Canal Mix",          url:"https://4c4b867c89244861ac216426883d1ad0.msvdn.net/live/S35394734/Z6U2wGoDYANk/playlist.m3u8"},
+  {name:"Rock TV",            url:"https://tv.broadcasting.ro/rocktv/85c83a80-4f71-4f2d-a8d6-43f676896bcb.m3u8"},
+  {name:"TV Cidade Brasil",   url:"https://stmv2.samcast.com.br/tvcidadebrasil/tvcidadebrasil/playlist.m3u8"},
+  {name:"Redemundo TV",       url:"https://video04.logicahost.com.br/redemundotv/redemundotv/playlist.m3u8"},
+  {name:"RNW",                url:"https://run-rnw-rn.otteravision.com/rnw/rn/rnw_rn_720p_high.m3u8"},
+  {name:"TVI Reality",        url:"https://video-auth5.iol.pt/live_tvi_reality/live_tvi_reality/edge_servers/tvireality-720_passthrough/playlist.m3u8"},
+  {name:"Clube FM",           url:"https://clubefm1.brasilstream.com.br/hls/clubefm1/index.m3u8"},
+];
+
+const PLAYLIST = [];
+CHANNELS.forEach((_,i) => {
+  PLAYLIST.push({type:'channel', chIndex:i});
+  PLAYLIST.push({type:'ad',      chIndex:i});
+});
+const TOTAL = PLAYLIST.length;
+
+const vidA      = document.getElementById('vidA');
+const vidB      = document.getElementById('vidB');
+const bannerDiv = document.getElementById('banner');
+const bannerImg = document.getElementById('bannerImg');
+const adSlot    = document.getElementById('adSlot');
+const adEmpty   = document.getElementById('adEmpty');
+const adImg     = document.getElementById('adImg');
+const adVid     = document.getElementById('adVid');
+const adBadge   = document.getElementById('adBadge');
+const loader    = document.getElementById('loader');
+const errMsg    = document.getElementById('errMsg');
+const errName   = document.getElementById('errName');
+const errCount  = document.getElementById('errCount');
+const chNum     = document.getElementById('chNum');
+const chName    = document.getElementById('chName');
+const info      = document.getElementById('info');
+const dotsEl    = document.getElementById('dots');
+const soundHint = document.getElementById('soundHint');
+
+let currentSlot   = 0;
+let isChanging    = false;
+let soundUnlocked = false;
+let hlsA = null, hlsB = null;
+let infoTimer = null, errCountInterval = null;
+let banners = {};
+let activeVid  = vidA;
+let preloadVid = vidB;
+let preloadIdx = -1;
+let inAd = false;
+
+function isVideoUrl(url) {
+  if (!url) return false;
+  if (url.startsWith('data:video/')) return true;
+  return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url);
+}
+
+onValue(dbRef(db, 'banners'), snap => {
+  const raw = snap.val() || {};
+  banners = {};
+  Object.keys(raw).forEach(k => { banners[String(k)] = raw[k]; });
+  const item = PLAYLIST[currentSlot];
+  if (item) {
+    if (item.type === 'channel') refreshWatermark(item.chIndex);
+    if (item.type === 'ad')      refreshAdSlot(item.chIndex);
+  }
+});
+
+function refreshWatermark(chIndex) {
+  const b = banners[String(chIndex)];
+  if (b && b.url && !isVideoUrl(b.url)) {
+    // Marca d'água só exibe imagem (vídeo fica só no slot)
+    bannerImg.src = b.url;
+    bannerImg.onload = () => bannerDiv.classList.add('show');
+    bannerImg.onerror = () => bannerDiv.classList.remove('show');
+  } else if (b && b.url && isVideoUrl(b.url)) {
+    // Se for vídeo, mostra marca d'água vazia (vídeo é para o slot)
+    bannerDiv.classList.remove('show');
+  } else {
+    bannerDiv.classList.remove('show');
+  }
+}
+
+function refreshAdSlot(chIndex) {
+  const b = banners[String(chIndex)];
+  adBadge.style.display = 'block';
+
+  // Para e limpa tudo
+  adVid.pause();
+  adVid.src = '';
+  adVid.style.display = 'none';
+  adImg.style.display = 'none';
+  adEmpty.style.display = 'none';
+
+  if (b && b.url) {
+    if (isVideoUrl(b.url)) {
+      adVid.src = b.url;
+      adVid.style.display = 'block';
+      adVid.muted = true;
+      adVid.play().catch(() => {});
+    } else {
+      adImg.src = b.url;
+      adImg.style.display = 'block';
+    }
+  } else {
+    adEmpty.style.display = 'flex';
+  }
+
+  adSlot.classList.add('show');
+  loader.classList.add('hide');
+}
+
+function hideAd() {
+  inAd = false;
+  adSlot.classList.remove('show');
+  adVid.pause();
+  adVid.src = '';
+  adVid.style.display   = 'none';
+  adImg.src             = '';
+  adImg.style.display   = 'none';
+  adEmpty.style.display = 'none';
+  adBadge.style.display = 'none';
+  activeVid.muted  = !soundUnlocked;
+  activeVid.volume = 1;
+}
+
+PLAYLIST.forEach((item,i) => {
+  const d = document.createElement('div');
+  d.className = 'dot'+(item.type==='ad'?' is-ad':'')+(i===0?' active':'');
+  dotsEl.appendChild(d);
+});
+function updateDots(i){ document.querySelectorAll('.dot').forEach((d,j)=>d.classList.toggle('active',j===i)); }
+function showInfo(){ info.classList.remove('hide'); clearTimeout(infoTimer); infoTimer=setTimeout(()=>info.classList.add('hide'),4000); }
+
+function tryUnlock(){
+  if (soundUnlocked) return;
+  soundUnlocked=true; soundHint.classList.remove('show');
+  if (!inAd){ activeVid.muted=false; activeVid.volume=1; activeVid.play().catch(()=>{}); }
+}
+document.addEventListener('touchstart',tryUnlock,{passive:true});
+document.addEventListener('mousedown',tryUnlock);
+
+function createHLS(vidEl,url,onReady,onErr){
+  let h=null;
+  if(Hls.isSupported()){
+    h=new Hls({maxBufferLength:8,maxMaxBufferLength:16,lowLatencyMode:true,fragLoadingTimeOut:8000,manifestLoadingTimeOut:8000});
+    h.loadSource(url); h.attachMedia(vidEl);
+    h.on(Hls.Events.MANIFEST_PARSED,()=>{ vidEl.play().catch(()=>{}); if(onReady)onReady(); });
+    h.on(Hls.Events.ERROR,(_,d)=>{ if(d.fatal&&onErr)onErr(); });
+  } else if(vidEl.canPlayType('application/vnd.apple.mpegurl')){
+    vidEl.src=url;
+    vidEl.addEventListener('canplay',()=>{ vidEl.play().catch(()=>{}); if(onReady)onReady(); },{once:true});
+    vidEl.addEventListener('error',()=>{ if(onErr)onErr(); },{once:true});
+    vidEl.load();
+  } else { if(onErr)onErr(); }
+  return h;
+}
+function destroyHLS(h,vidEl){ if(h)h.destroy(); vidEl.src=''; vidEl.load(); }
+
+function preloadNext(fromSlot){
+  let idx=((fromSlot%TOTAL)+TOTAL)%TOTAL;
+  for(let s=0;s<TOTAL;s++){ if(PLAYLIST[idx].type==='channel')break; idx=(idx+1)%TOTAL; }
+  const ci=PLAYLIST[idx].chIndex;
+  if(preloadIdx===ci)return;
+  preloadIdx=ci;
+  destroyHLS(hlsB,preloadVid);
+  preloadVid.muted=true;
+  hlsB=createHLS(preloadVid,CHANNELS[ci].url,null,null);
+}
+
+function loadSlot(slotIdx){
+  if(isChanging)return;
+  isChanging=true;
+  currentSlot=((slotIdx%TOTAL)+TOTAL)%TOTAL;
+  const item=PLAYLIST[currentSlot];
+  updateDots(currentSlot); showInfo();
+  errMsg.style.display='none'; clearInterval(errCountInterval);
+
+  if(item.type==='ad'){
+    inAd=true;
+    vidA.muted=true; vidB.muted=true;
+    chNum.textContent=`PUBLICIDADE ${item.chIndex+1} / ${CHANNELS.length}`;
+    chName.textContent=CHANNELS[item.chIndex].name;
+    refreshAdSlot(item.chIndex);
+    isChanging=false;
+    return;
+  }
+
+  hideAd();
+  bannerDiv.classList.remove('show');
+  const ch=CHANNELS[item.chIndex];
+  chNum.textContent=`CANAL ${String(item.chIndex+1).padStart(2,'0')} / ${CHANNELS.length}`;
+  chName.textContent=ch.name;
+
+  const preloadReady=(preloadIdx===item.chIndex&&preloadVid.readyState>=2);
+  if(preloadReady){
+    loader.classList.add('hide');
+    const tH=hlsA,tV=activeVid;
+    hlsA=hlsB; hlsB=tH; activeVid=preloadVid; preloadVid=tV;
+    activeVid.style.opacity='1'; activeVid.style.pointerEvents='auto';
+    preloadVid.style.opacity='0'; preloadVid.style.pointerEvents='none';
+    activeVid.muted=!soundUnlocked; activeVid.volume=1;
+    activeVid.play().then(()=>soundHint.classList.remove('show')).catch(()=>{activeVid.muted=true;activeVid.play().catch(()=>{});soundHint.classList.add('show');});
+    preloadIdx=-1; isChanging=false;
+    refreshWatermark(item.chIndex);
+    setTimeout(()=>preloadNext(currentSlot+1),500);
+  } else {
+    loader.classList.remove('hide');
+    destroyHLS(hlsA,activeVid);
+    activeVid.muted=true;
+    const onReady=()=>{
+      activeVid.muted=!soundUnlocked; activeVid.volume=1;
+      activeVid.play().then(()=>soundHint.classList.remove('show')).catch(()=>{activeVid.muted=true;activeVid.play().catch(()=>{});soundHint.classList.add('show');});
+      loader.classList.add('hide'); isChanging=false;
+      refreshWatermark(item.chIndex);
+      setTimeout(()=>preloadNext(currentSlot+1),800);
+    };
+    const onErr=()=>{
+      loader.classList.add('hide'); isChanging=false;
+      errName.textContent=ch.name; errMsg.style.display='flex';
+      let cd=5; errCount.textContent=cd;
+      errCountInterval=setInterval(()=>{cd--;errCount.textContent=cd;if(cd<=0){clearInterval(errCountInterval);errMsg.style.display='none';loadSlot(currentSlot+1);}},1000);
+    };
+    hlsA=createHLS(activeVid,ch.url,onReady,onErr);
+  }
+}
+
+window.nextSlot=()=>{ if(!isChanging)loadSlot(currentSlot+1); };
+window.prevSlot=()=>{ if(!isChanging)loadSlot(currentSlot-1); };
+
+let mY=0,mX=0,mDown=false;
+document.addEventListener('mousedown',e=>{mY=e.clientY;mX=e.clientX;mDown=true;});
+document.addEventListener('mouseup',e=>{if(!mDown)return;mDown=false;const dy=e.clientY-mY,dx=e.clientX-mX;if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>35){dy<0?nextSlot():prevSlot();}});
+document.addEventListener('mousemove',()=>showInfo());
+let tY=0,tX=0;
+document.addEventListener('touchstart',e=>{tY=e.touches[0].clientY;tX=e.touches[0].clientX;showInfo();},{passive:true});
+document.addEventListener('touchend',e=>{const dy=e.changedTouches[0].clientY-tY,dx=e.changedTouches[0].clientX-tX;if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>35){dy<0?nextSlot():prevSlot();}},{passive:true});
+document.addEventListener('wheel',e=>{e.preventDefault();e.deltaY>0?nextSlot():prevSlot();},{passive:false});
+document.addEventListener('keydown',e=>{if(e.key==='ArrowDown'||e.key==='ArrowRight')nextSlot();if(e.key==='ArrowUp'||e.key==='ArrowLeft')prevSlot();});
+
+loadSlot(0);
+</script>
+</body>
+</html>
