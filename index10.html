@@ -36,7 +36,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'DM
 }
 #soundWall.gone{display:none;}
 #soundWallBtn{
-  background:#dc1e1e;color:#fff;border:none;
+  background:#000;color:#fff;border:none;
   font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.16em;
   padding:22px 44px;border-radius:50px;
   display:flex;align-items:center;gap:14px;cursor:pointer;
@@ -97,12 +97,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'DM
   <!-- PAREDE DE SOM — some no primeiro toque e desbloqueia tudo -->
   <div id="soundWall">
     <button id="soundWallBtn">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-      </svg>
-      TOQUE PARA COMEÇAR
+      <span style="color:#fff">ASSISTA TV <span style="color:#dc1e1e">S</span>X</span>
     </button>
     <div id="soundWallSub">som ativado automaticamente</div>
   </div>
@@ -201,7 +196,6 @@ let activeVid  = vidA;
 let preloadVid = vidB;
 let preloadIdx = -1;
 let inAd       = false;
-// src pendente: quando o anúncio chega antes do toque, guarda aqui
 let pendingAdSrc = null;
 
 function isVideoUrl(url){
@@ -210,22 +204,15 @@ function isVideoUrl(url){
   return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url);
 }
 
-// ─── DESBLOQUEIO DE SOM ───────────────────────────────────────────────────────
-// No celular o .play() COM SOM só funciona se chamado
-// DIRETAMENTE dentro do handler de toque (call stack síncrono).
-// Por isso fazemos tudo aqui, dentro do listener.
 function unlockSound(){
   if(soundUnlocked) return;
   soundUnlocked = true;
   soundWall.classList.add('gone');
 
-  // 1. desbloqueia canal ativo
   activeVid.muted  = false;
   activeVid.volume = 1;
   activeVid.play().catch(()=>{});
 
-  // 2. se tiver src pendente de anúncio, carrega e toca com som AGORA
-  //    (estamos dentro do handler de toque — permitido pelo browser)
   if(pendingAdSrc){
     adVid.src    = pendingAdSrc;
     adVid.muted  = false;
@@ -233,14 +220,12 @@ function unlockSound(){
     adVid.play().catch(()=>{});
     pendingAdSrc = null;
   } else if(adVid.src && adVid.style.display === 'block'){
-    // já tem src carregado (ex: estava mudo) — destrava o som
     adVid.muted  = false;
     adVid.volume = 1;
     adVid.play().catch(()=>{});
   }
 }
 
-// handler síncrono de toque — ESSENCIAL para iOS/Android
 soundWall.addEventListener('touchstart', e=>{
   e.preventDefault();
   unlockSound();
@@ -249,10 +234,8 @@ soundWall.addEventListener('mousedown', e=>{
   e.preventDefault();
   unlockSound();
 }, {passive:false});
-// fallback para qualquer outro toque na página
 document.addEventListener('touchstart', ()=>{ if(!soundUnlocked) unlockSound(); }, {passive:true});
 document.addEventListener('mousedown',  ()=>{ if(!soundUnlocked) unlockSound(); });
-// ─────────────────────────────────────────────────────────────────────────────
 
 onValue(dbRef(db,'banners'),snap=>{
   const raw = snap.val()||{};
@@ -292,14 +275,11 @@ function refreshAdSlot(chIndex){
       adVid.style.display = 'block';
 
       if(soundUnlocked){
-        // usuário já tocou → carrega e toca COM SOM direto
         adVid.src    = b.url;
         adVid.muted  = false;
         adVid.volume = 1;
         adVid.play().catch(()=>{});
       } else {
-        // usuário ainda não tocou → guarda o src, toca MUDO por enquanto
-        // quando tocar na soundWall, o unlockSound() vai carregar com som
         pendingAdSrc = b.url;
         adVid.src    = b.url;
         adVid.muted  = true;
